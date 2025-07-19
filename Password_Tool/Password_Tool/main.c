@@ -1,126 +1,154 @@
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <time.h>
+#include <iostream>
+#include <string>
+#include <vector>
+#include <random>
 #include <openssl/evp.h>
+#include <openssl/rand.h>
+#include <iomanip>
+#include <limits>
 
-#define MAX_LEN 256
+class PasswordTool {
+public:
+    void run() {
+        initializeRandomGenerator();
 
-void generate_password(int length) {
-    char password[MAX_LEN];
-    const char charset[] = "abcdefghijklmnopqrstuvwxyz"
-                           "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
-                           "0123456789"
-                           "!@#$^&*()-_=+[]{}";
+        while (true) {
+            displayMenu();
+            int choice = getMenuChoice();
 
-    for (int i = 0; i < length; i++) {
-        int key = rand() % (sizeof(charset) - 1);
-        password[i] = charset[key];
+            switch (choice) {
+                case 1:
+                    handlePasswordGeneration();
+                    break;
+                case 2:
+                    handlePasswordHashing();
+                    break;
+                case 3:
+                    std::cout << "Exiting program...\n";
+                    return;
+                default:
+                    std::cout << "Invalid option. Please try again.\n";
+            }
+        }
     }
 
-    password[length] = '\0';
-    printf("Your generated password is: %s\n", password);
-}
+private:
+    std::mt19937 rng;
 
-void print_hash(unsigned char *hash, unsigned int len) {
-    for (unsigned int i = 0; i < len; i++)
-        printf("%02x", hash[i]);
-    printf("\n");
-}
-
-void hash_password(const char *pw, const char *algo_name) {
-    const EVP_MD *algo = NULL;
-    EVP_MD_CTX *ctx = EVP_MD_CTX_new();
-    unsigned char hash[MAX_LEN];
-    unsigned int hash_len = 0;
-
-    if (!ctx) {
-        printf("Error: failed to create digest context.\n");
-        return;
+    void initializeRandomGenerator() {
+        std::random_device rd;
+        rng.seed(rd());
     }
 
-    if (strcmp(algo_name, "md5") == 0) {
-        algo = EVP_md5();
-    } else if (strcmp(algo_name, "sha256") == 0) {
-        algo = EVP_sha256();
-    } else if (strcmp(algo_name, "sha512") == 0) {
-        algo = EVP_sha512();
-    } else {
-        printf("Unsupported algorithm: %s\n", algo_name);
-        EVP_MD_CTX_free(ctx);
-        return;
+    void displayMenu() const {
+        std::cout << "\nPassword Tool Menu:\n"
+        << "1. Generate a random password\n"
+        << "2. Hash a password\n"
+        << "3. Exit\n"
+        << "Choose an option: ";
     }
 
-    if (EVP_DigestInit_ex(ctx, algo, NULL) != 1 ||
-        EVP_DigestUpdate(ctx, pw, strlen(pw)) != 1 ||
-        EVP_DigestFinal_ex(ctx, hash, &hash_len) != 1) {
-        printf("Hashing failed.\n");
-    } else {
-        printf("%s hash: ", algo_name);
-        print_hash(hash, hash_len);
+    int getMenuChoice() const {
+        int choice;
+        while (!(std::cin >> choice)) {
+            std::cin.clear();
+            std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
+            std::cout << "Invalid input. Please enter a number: ";
+        }
+        std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
+        return choice;
     }
 
-    EVP_MD_CTX_free(ctx);
-}
+    void handlePasswordGeneration() {
+        constexpr int MAX_LEN = 256;
+        std::cout << "Enter the password length (1-" << MAX_LEN - 1 << "): ";
 
-void display_menu() {
-    printf("\nPassword Tool Menu:\n");
-    printf("1. Generate a random password\n");
-    printf("2. Hash a password\n");
-    printf("3. Exit\n");
-    printf("Choose an option: ");
-}
+        int length;
+        if (!(std::cin >> length) || length < 1 || length >= MAX_LEN) {
+            std::cin.clear();
+            std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
+            std::cout << "Invalid length. Please try again.\n";
+            return;
+        }
+
+        generatePassword(length);
+    }
+
+    void generatePassword(int length) {
+        const std::string charset =
+        "abcdefghijklmnopqrstuvwxyz"
+        "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+        "0123456789"
+        "!@#$^&*()-_=+[]{}";
+
+        std::uniform_int_distribution<size_t> dist(0, charset.size() - 1);
+        std::string password;
+
+        for (int i = 0; i < length; ++i) {
+            password += charset[dist(rng)];
+        }
+
+        std::cout << "Your generated password is: " << password << "\n";
+    }
+
+    void handlePasswordHashing() {
+        std::cout << "Enter password to hash: ";
+        std::string password;
+        std::getline(std::cin, password);
+
+        std::cout << "Choose algorithm (md5/sha256/sha512): ";
+        std::string algorithm;
+        std::getline(std::cin, algorithm);
+
+        hashPassword(password, algorithm);
+    }
+
+    void hashPassword(const std::string& password, const std::string& algorithm) {
+        const EVP_MD* algo = nullptr;
+
+        if (algorithm == "md5") {
+            algo = EVP_md5();
+        } else if (algorithm == "sha256") {
+            algo = EVP_sha256();
+        } else if (algorithm == "sha512") {
+            algo = EVP_sha512();
+        } else {
+            std::cout << "Unsupported algorithm: " << algorithm << "\n";
+            return;
+        }
+
+        EVP_MD_CTX* ctx = EVP_MD_CTX_new();
+        if (!ctx) {
+            std::cout << "Error: failed to create digest context.\n";
+            return;
+        }
+
+        unsigned char hash[EVP_MAX_MD_SIZE];
+        unsigned int hashLength = 0;
+
+        if (EVP_DigestInit_ex(ctx, algo, nullptr) != 1 ||
+            EVP_DigestUpdate(ctx, password.data(), password.length()) != 1 ||
+            EVP_DigestFinal_ex(ctx, hash, &hashLength) != 1) {
+            std::cout << "Hashing failed.\n";
+            } else {
+                std::cout << algorithm << " hash: ";
+                printHash(hash, hashLength);
+            }
+
+            EVP_MD_CTX_free(ctx);
+    }
+
+    void printHash(const unsigned char* hash, unsigned int length) const {
+        std::cout << std::hex << std::setfill('0');
+        for (unsigned int i = 0; i < length; ++i) {
+            std::cout << std::setw(2) << static_cast<int>(hash[i]);
+        }
+        std::cout << std::dec << "\n";
+    }
+};
 
 int main() {
-    int choice;
-    char pw[MAX_LEN], algo[16];
-    int length;
-
-    srand(time(NULL));
-
-    while (1) {
-        display_menu();
-        if (scanf("%d", &choice) != 1) {
-            printf("Invalid input. Please enter a number.\n");
-            while (getchar() != '\n'); 
-            continue;
-        }
-
-        switch (choice) {
-            case 1: 
-                printf("Enter the password length (1-%d): ", MAX_LEN - 1);
-                if (scanf("%d", &length) != 1 || length < 1 || length >= MAX_LEN) {
-                    printf("Invalid length. Please try again.\n");
-                    while (getchar() != '\n'); 
-                    break;
-                }
-                generate_password(length);
-                break;
-
-            case 2: 
-                printf("Enter password to hash: ");
-                if (scanf("%255s", pw) != 1) {
-                    printf("Invalid password input.\n");
-                    while (getchar() != '\n'); 
-                    break;
-                }
-                printf("Choose algorithm (md5/sha256/sha512): ");
-                if (scanf("%15s", algo) != 1) {
-                    printf("Invalid algorithm input.\n");
-                    while (getchar() != '\n'); 
-                    break;
-                }
-                hash_password(pw, algo);
-                break;
-
-            case 3: 
-                printf("Exiting program...\n");
-                return 0;
-
-            default:
-                printf("Invalid option. Please try again.\n");
-        }
-    }
-
+    PasswordTool tool;
+    tool.run();
     return 0;
 }

@@ -33,7 +33,7 @@ A versatile command-line utility for both generating secure passwords and hashin
      
   3. Compile the program:
 
-    gcc password_tool.c -o password_tool -lcrypto
+    g++ password_tool.cpp -o password_tool -lcrypto
   
   4. Run the tool:
 
